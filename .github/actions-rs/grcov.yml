@@ -7,5 +7,4 @@ ignore:
   - "C:/*"
   - "../*"
   - src/lib.rs
-  - src/client/aws_s3/mod.rs
   - "src/mock/*"

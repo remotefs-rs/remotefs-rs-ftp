@@ -111,17 +111,13 @@ In addition to the process described for the PRs, I've also decided to introduce
 
 In case you want to test the aws s3 client, you need to follow these steps:
 
-1. Put in your environment variables the following values:
+1. Run containers
 
-    - `AWS_S3_BUCKET`: name of your s3 bucket
-    - `AWS_S3_REGION`: the region assigned to your s3 bucket
-    - `AWS_ACCESS_KEY_ID`: your access key ID
-    - `AWS_SECRET_ACCESS_KEY`: your aws secret access key
+    ```sh
+    docker-compose -f "tests/docker-compose.yml" up -d --build
+    ```
 
-2. Run tests with `cargo test --features with-s3-ci`
-
-> ⚠️ The aws-s3 client test units sends about ~ 100 GET requests to your s3 bucket.
-> ❗ The author of the library is not in any case responsible for ANY additional cost requested by Amazon caused by testing this library.
+2. Run tests with `cargo test --features with-containers`
 
 ---
 

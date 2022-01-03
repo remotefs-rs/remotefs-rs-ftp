@@ -13,9 +13,11 @@ jobs:
       - uses: actions/checkout@v2
       - name: Build
         run: cargo build --all-features
+      - name: Build (unsecure)
+        run: cargo build --no-default-features
       - name: Run tests
-        run: cargo test --verbose --no-default-features --features find,github-actions --no-fail-fast
+        run: cargo test --verbose --no-default-features --features find,secure,github-actions --no-fail-fast
         env:
           RUST_LOG: trace
       - name: Clippy
-        run: cargo clippy -- -Dwarnings
+        run: cargo clippy --features find,secure -- -Dwarnings
