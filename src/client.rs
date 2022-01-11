@@ -32,6 +32,7 @@ use remotefs::fs::{
 };
 use remotefs::File;
 
+use std::cell::{RefCell, RefMut};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 #[cfg(feature = "secure")]
@@ -46,7 +47,7 @@ use suppaftp::{
 /// Ftp file system client
 pub struct FtpFs {
     /// Client
-    stream: Option<FtpStream>,
+    stream: Option<RefCell<FtpStream>>,
     // -- options
     hostname: String,
     port: u16,
@@ -120,18 +121,17 @@ impl FtpFs {
         self
     }
 
-    // -- as_ref
-
-    /// Get reference to inner stream
-    pub fn stream(&mut self) -> Option<&mut FtpStream> {
-        self.stream.as_mut()
-    }
-
     // -- private
+
+    /// Get a reference to inner stream.
+    /// This will return a `RefMut`, so don't call this function if you already have an active reference
+    pub fn stream(&self) -> RefMut<FtpStream> {
+        self.stream.as_ref().unwrap().borrow_mut()
+    }
 
     /// Parse all lines of LIST command output and instantiates a vector of `File` from it.
     /// This function also converts from `suppaftp::list::File` to `File`
-    fn parse_list_lines(&mut self, path: &Path, lines: Vec<String>) -> Vec<File> {
+    fn parse_list_lines(&self, path: &Path, lines: Vec<String>) -> Vec<File> {
         // Iter and collect
         lines
             .into_iter()
@@ -199,7 +199,7 @@ impl FtpFs {
         p.to_path_buf()
     }
 
-    fn check_connection(&mut self) -> RemoteResult<()> {
+    fn check_connection(&self) -> RemoteResult<()> {
         if self.is_connected() {
             Ok(())
         } else {
@@ -261,41 +261,42 @@ impl RemoteFs for FtpFs {
             })?;
         info!("Connection established!");
         let welcome = Welcome::default().banner(stream.get_welcome_msg().map(|x| x.to_string()));
-        self.stream = Some(stream);
+        self.stream = Some(RefCell::new(stream));
         Ok(welcome)
     }
 
     fn disconnect(&mut self) -> RemoteResult<()> {
         info!("Disconnecting from FTP server...");
         self.check_connection()?;
-        let stream = self.stream.as_mut().unwrap();
+        let mut stream = self.stream();
         stream.quit().map_err(|e| {
             error!("Failed to disconnect from remote: {}", e);
             RemoteError::new_ex(RemoteErrorType::ConnectionError, e)
         })?;
+        drop(stream);
         self.stream = None;
         Ok(())
     }
 
-    fn is_connected(&mut self) -> bool {
+    fn is_connected(&self) -> bool {
         self.stream.is_some()
     }
 
-    fn pwd(&mut self) -> RemoteResult<PathBuf> {
+    fn pwd(&self) -> RemoteResult<PathBuf> {
         debug!("Getting working directory...");
         self.check_connection()?;
-        let stream = self.stream.as_mut().unwrap();
+        let mut stream = self.stream();
         stream.pwd().map(PathBuf::from).map_err(|e| {
             error!("Pwd failed: {}", e);
             RemoteError::new_ex(RemoteErrorType::ProtocolError, e)
         })
     }
 
-    fn change_dir(&mut self, dir: &Path) -> RemoteResult<PathBuf> {
+    fn change_dir(&self, dir: &Path) -> RemoteResult<PathBuf> {
         debug!("Changing working directory to {}", dir.display());
         self.check_connection()?;
         let dir: PathBuf = Self::resolve(dir);
-        let stream = self.stream.as_mut().unwrap();
+        let mut stream = self.stream();
         stream
             .cwd(dir.as_path().to_string_lossy())
             .map(|_| dir)
@@ -305,11 +306,11 @@ impl RemoteFs for FtpFs {
             })
     }
 
-    fn list_dir(&mut self, path: &Path) -> RemoteResult<Vec<File>> {
+    fn list_dir(&self, path: &Path) -> RemoteResult<Vec<File>> {
         debug!("Getting list entries for {}", path.display());
         self.check_connection()?;
         let path: PathBuf = Self::resolve(path);
-        let stream = self.stream.as_mut().unwrap();
+        let mut stream = self.stream();
         stream
             .list(Some(&path.as_path().to_string_lossy()))
             .map(|files| self.parse_list_lines(path.as_path(), files))
@@ -319,7 +320,7 @@ impl RemoteFs for FtpFs {
             })
     }
 
-    fn stat(&mut self, path: &Path) -> RemoteResult<File> {
+    fn stat(&self, path: &Path) -> RemoteResult<File> {
         debug!("Getting file information for {}", path.display());
         self.check_connection()?;
         // Resolve and absolutize path
@@ -350,11 +351,11 @@ impl RemoteFs for FtpFs {
         }
     }
 
-    fn setstat(&mut self, _path: &Path, _metadata: Metadata) -> RemoteResult<()> {
+    fn setstat(&self, _path: &Path, _metadata: Metadata) -> RemoteResult<()> {
         Err(RemoteError::new(RemoteErrorType::UnsupportedFeature))
     }
 
-    fn exists(&mut self, path: &Path) -> RemoteResult<bool> {
+    fn exists(&self, path: &Path) -> RemoteResult<bool> {
         debug!("Checking whether {} exists", path.display());
         match self.stat(path) {
             Ok(_) => Ok(true),
@@ -366,22 +367,22 @@ impl RemoteFs for FtpFs {
         }
     }
 
-    fn remove_file(&mut self, path: &Path) -> RemoteResult<()> {
+    fn remove_file(&self, path: &Path) -> RemoteResult<()> {
         debug!("Removing file {}", path.display());
         self.check_connection()?;
         let path = Self::resolve(path);
-        let stream = self.stream.as_mut().unwrap();
+        let mut stream = self.stream();
         stream.rm(&path.as_path().to_string_lossy()).map_err(|e| {
             error!("Failed to remove file {}", e);
             RemoteError::new_ex(RemoteErrorType::ProtocolError, e)
         })
     }
 
-    fn remove_dir(&mut self, path: &Path) -> RemoteResult<()> {
+    fn remove_dir(&self, path: &Path) -> RemoteResult<()> {
         debug!("Removing file {}", path.display());
         self.check_connection()?;
         let path = Self::resolve(path);
-        let stream = self.stream.as_mut().unwrap();
+        let mut stream = self.stream();
         stream
             .rmdir(&path.as_path().to_string_lossy())
             .map_err(|e| {
@@ -390,11 +391,11 @@ impl RemoteFs for FtpFs {
             })
     }
 
-    fn create_dir(&mut self, path: &Path, _mode: UnixPex) -> RemoteResult<()> {
+    fn create_dir(&self, path: &Path, _mode: UnixPex) -> RemoteResult<()> {
         debug!("Trying to create directory {}", path.display());
         self.check_connection()?;
         let path = Self::resolve(path);
-        let stream = self.stream.as_mut().unwrap();
+        let mut stream = self.stream();
         match stream.mkdir(&path.as_path().to_string_lossy()) {
             Ok(_) => Ok(()),
             Err(FtpError::UnexpectedResponse(Response {
@@ -411,20 +412,20 @@ impl RemoteFs for FtpFs {
         }
     }
 
-    fn symlink(&mut self, _path: &Path, _target: &Path) -> RemoteResult<()> {
+    fn symlink(&self, _path: &Path, _target: &Path) -> RemoteResult<()> {
         Err(RemoteError::new(RemoteErrorType::UnsupportedFeature))
     }
 
-    fn copy(&mut self, _src: &Path, _dest: &Path) -> RemoteResult<()> {
+    fn copy(&self, _src: &Path, _dest: &Path) -> RemoteResult<()> {
         Err(RemoteError::new(RemoteErrorType::UnsupportedFeature))
     }
 
-    fn mov(&mut self, src: &Path, dest: &Path) -> RemoteResult<()> {
+    fn mov(&self, src: &Path, dest: &Path) -> RemoteResult<()> {
         debug!("Trying to rename {} to {}", src.display(), dest.display());
         self.check_connection()?;
         let src = Self::resolve(src);
         let dest = Self::resolve(dest);
-        let stream = self.stream.as_mut().unwrap();
+        let mut stream = self.stream();
         stream
             .rename(
                 &src.as_path().to_string_lossy(),
@@ -436,15 +437,15 @@ impl RemoteFs for FtpFs {
             })
     }
 
-    fn exec(&mut self, _cmd: &str) -> RemoteResult<(u32, String)> {
+    fn exec(&self, _cmd: &str) -> RemoteResult<(u32, String)> {
         Err(RemoteError::new(RemoteErrorType::UnsupportedFeature))
     }
 
-    fn append(&mut self, path: &Path, _metadata: &Metadata) -> RemoteResult<WriteStream> {
+    fn append(&self, path: &Path, _metadata: &Metadata) -> RemoteResult<WriteStream> {
         debug!("Opening {} for append", path.display());
         self.check_connection()?;
         let path = Self::resolve(path);
-        let stream = self.stream.as_mut().unwrap();
+        let mut stream = self.stream();
         stream
             .append_with_stream(&path.as_path().to_string_lossy())
             .map(|x| Box::new(x) as Box<dyn Write>)
@@ -455,11 +456,11 @@ impl RemoteFs for FtpFs {
             })
     }
 
-    fn create(&mut self, path: &Path, _metadata: &Metadata) -> RemoteResult<WriteStream> {
+    fn create(&self, path: &Path, _metadata: &Metadata) -> RemoteResult<WriteStream> {
         debug!("Opening {} for write", path.display());
         self.check_connection()?;
         let path = Self::resolve(path);
-        let stream = self.stream.as_mut().unwrap();
+        let mut stream = self.stream();
         stream
             .put_with_stream(&path.as_path().to_string_lossy())
             .map(|x| Box::new(x) as Box<dyn Write>)
@@ -470,11 +471,11 @@ impl RemoteFs for FtpFs {
             })
     }
 
-    fn open(&mut self, path: &Path) -> RemoteResult<ReadStream> {
+    fn open(&self, path: &Path) -> RemoteResult<ReadStream> {
         debug!("Opening {} for read", path.display());
         self.check_connection()?;
         let path = Self::resolve(path);
-        let stream = self.stream.as_mut().unwrap();
+        let mut stream = self.stream();
         stream
             .retr_as_stream(&path.as_path().to_string_lossy())
             .map(|x| Box::new(x) as Box<dyn Read>)
@@ -485,20 +486,20 @@ impl RemoteFs for FtpFs {
             })
     }
 
-    fn on_read(&mut self, readable: ReadStream) -> RemoteResult<()> {
+    fn on_read(&self, readable: ReadStream) -> RemoteResult<()> {
         debug!("Finalizing read stream");
         self.check_connection()?;
-        let stream = self.stream.as_mut().unwrap();
+        let mut stream = self.stream();
         stream.finalize_retr_stream(readable).map_err(|e| {
             error!("Failed to finalize read stream: {}", e);
             RemoteError::new_ex(RemoteErrorType::ProtocolError, e)
         })
     }
 
-    fn on_written(&mut self, writable: WriteStream) -> RemoteResult<()> {
+    fn on_written(&self, writable: WriteStream) -> RemoteResult<()> {
         debug!("Finalizing write stream");
         self.check_connection()?;
-        let stream = self.stream.as_mut().unwrap();
+        let mut stream = self.stream();
         stream.finalize_put_stream(writable).map_err(|e| {
             error!("Failed to finalize write stream: {}", e);
             RemoteError::new_ex(RemoteErrorType::ProtocolError, e)
@@ -586,7 +587,7 @@ mod test {
     #[serial]
     fn should_append_to_file() {
         crate::mock::logger();
-        let mut client = setup_client();
+        let client = setup_client();
         // Create file
         let p = Path::new("a.txt");
         let file_data = "test data\n";
@@ -619,7 +620,7 @@ mod test {
     #[serial]
     fn should_not_append_to_file() {
         crate::mock::logger();
-        let mut client = setup_client();
+        let client = setup_client();
         // Create file
         let p = Path::new("/tmp/aaaaaaa/hbbbbb/a.txt");
         // Append to file
@@ -636,7 +637,7 @@ mod test {
     #[serial]
     fn should_change_directory() {
         crate::mock::logger();
-        let mut client = setup_client();
+        let client = setup_client();
         let pwd = client.pwd().ok().unwrap();
         assert!(client.change_dir(Path::new("/")).is_ok());
         assert!(client.change_dir(pwd.as_path()).is_ok());
@@ -648,7 +649,7 @@ mod test {
     #[serial]
     fn should_not_change_directory() {
         crate::mock::logger();
-        let mut client = setup_client();
+        let client = setup_client();
         assert!(client
             .change_dir(Path::new("/tmp/sdfghjuireghiuergh/useghiyuwegh"))
             .is_err());
@@ -660,7 +661,7 @@ mod test {
     #[serial]
     fn should_not_copy_file() {
         crate::mock::logger();
-        let mut client = setup_client();
+        let client = setup_client();
         assert!(client.copy(Path::new("a.txt"), Path::new("b.txt")).is_err());
         finalize_client(client);
     }
@@ -670,7 +671,7 @@ mod test {
     #[serial]
     fn should_create_directory() {
         crate::mock::logger();
-        let mut client = setup_client();
+        let client = setup_client();
         // create directory
         assert!(client
             .create_dir(Path::new("mydir"), UnixPex::from(0o755))
@@ -683,7 +684,7 @@ mod test {
     #[serial]
     fn should_not_create_directory_cause_already_exists() {
         crate::mock::logger();
-        let mut client = setup_client();
+        let client = setup_client();
         // create directory
         assert!(client
             .create_dir(Path::new("mydir"), UnixPex::from(0o755))
@@ -704,7 +705,7 @@ mod test {
     #[serial]
     fn should_not_create_directory() {
         crate::mock::logger();
-        let mut client = setup_client();
+        let client = setup_client();
         // create directory
         assert!(client
             .create_dir(
@@ -720,7 +721,7 @@ mod test {
     #[serial]
     fn should_create_file() {
         crate::mock::logger();
-        let mut client = setup_client();
+        let client = setup_client();
         // Create file
         let p = Path::new("a.txt");
         let file_data = "test data\n";
@@ -742,7 +743,7 @@ mod test {
     #[serial]
     fn should_not_create_file() {
         crate::mock::logger();
-        let mut client = setup_client();
+        let client = setup_client();
         // Create file
         let p = Path::new("/tmp/ahsufhauiefhuiashf/hfhfhfhf");
         let file_data = "test data\n";
@@ -758,7 +759,7 @@ mod test {
     #[serial]
     fn should_not_exec_command() {
         crate::mock::logger();
-        let mut client = setup_client();
+        let client = setup_client();
         // Create file
         assert!(client.exec("echo 5").is_err());
         finalize_client(client);
@@ -769,7 +770,7 @@ mod test {
     #[serial]
     fn should_tell_whether_file_exists() {
         crate::mock::logger();
-        let mut client = setup_client();
+        let client = setup_client();
         // Create file
         let p = Path::new("a.txt");
         let file_data = "test data\n";
@@ -792,7 +793,7 @@ mod test {
     #[serial]
     fn should_list_dir() {
         crate::mock::logger();
-        let mut client = setup_client();
+        let client = setup_client();
         // Create file
         let wrkdir = client.pwd().ok().unwrap();
         let p = Path::new("a.txt");
@@ -825,7 +826,7 @@ mod test {
     #[serial]
     fn should_move_file() {
         crate::mock::logger();
-        let mut client = setup_client();
+        let client = setup_client();
         // Create file
         let p = Path::new("a.txt");
         let file_data = "test data\n";
@@ -846,7 +847,7 @@ mod test {
     #[serial]
     fn should_not_move_file() {
         crate::mock::logger();
-        let mut client = setup_client();
+        let client = setup_client();
         // Create file
         let p = Path::new("a.txt");
         let file_data = "test data\n";
@@ -868,7 +869,7 @@ mod test {
     #[serial]
     fn should_open_file() {
         crate::mock::logger();
-        let mut client = setup_client();
+        let client = setup_client();
         // Create file
         let p = Path::new("a.txt");
         let file_data = "test data\n";
@@ -887,7 +888,7 @@ mod test {
     #[serial]
     fn should_not_open_file() {
         crate::mock::logger();
-        let mut client = setup_client();
+        let client = setup_client();
         // Verify size
         let buffer: Box<dyn std::io::Write + Send> = Box::new(Vec::with_capacity(512));
         assert!(client
@@ -901,7 +902,7 @@ mod test {
     #[serial]
     fn should_print_working_directory() {
         crate::mock::logger();
-        let mut client = setup_client();
+        let client = setup_client();
         assert!(client.pwd().is_ok());
         finalize_client(client);
     }
@@ -911,7 +912,7 @@ mod test {
     #[serial]
     fn should_remove_dir_all() {
         crate::mock::logger();
-        let mut client = setup_client();
+        let client = setup_client();
         // Create dir
         let mut dir_path = client.pwd().ok().unwrap();
         dir_path.push(Path::new("test/"));
@@ -936,7 +937,7 @@ mod test {
     #[serial]
     fn should_not_remove_dir_all() {
         crate::mock::logger();
-        let mut client = setup_client();
+        let client = setup_client();
         // Remove dir
         assert!(client
             .remove_dir_all(Path::new("/tmp/aaaaaa/asuhi"))
@@ -949,7 +950,7 @@ mod test {
     #[serial]
     fn should_remove_dir() {
         crate::mock::logger();
-        let mut client = setup_client();
+        let client = setup_client();
         // Create dir
         let mut dir_path = client.pwd().ok().unwrap();
         dir_path.push(Path::new("test/"));
@@ -965,7 +966,7 @@ mod test {
     #[serial]
     fn should_not_remove_dir() {
         crate::mock::logger();
-        let mut client = setup_client();
+        let client = setup_client();
         // Create dir
         let mut dir_path = client.pwd().ok().unwrap();
         dir_path.push(Path::new("test/"));
@@ -990,7 +991,7 @@ mod test {
     #[serial]
     fn should_remove_file() {
         crate::mock::logger();
-        let mut client = setup_client();
+        let client = setup_client();
         // Create file
         let p = Path::new("a.txt");
         let file_data = "test data\n";
@@ -1007,7 +1008,7 @@ mod test {
     #[serial]
     fn should_not_setstat_file() {
         crate::mock::logger();
-        let mut client = setup_client();
+        let client = setup_client();
         // Create file
         let p = Path::new("a.sh");
         assert!(client
@@ -1034,7 +1035,7 @@ mod test {
     #[serial]
     fn should_stat_file() {
         crate::mock::logger();
-        let mut client = setup_client();
+        let client = setup_client();
         // Create file
         let p = Path::new("a.sh");
         let file_data = "echo 5\n";
@@ -1058,7 +1059,7 @@ mod test {
     #[serial]
     fn should_stat_root() {
         crate::mock::logger();
-        let mut client = setup_client();
+        let client = setup_client();
         // Create file
         let p = Path::new("/");
         let entry = client.stat(p).ok().unwrap();
@@ -1073,7 +1074,7 @@ mod test {
     #[serial]
     fn should_not_stat_file() {
         crate::mock::logger();
-        let mut client = setup_client();
+        let client = setup_client();
         // Create file
         let p = Path::new("a.sh");
         assert!(client.stat(p).is_err());
@@ -1085,7 +1086,7 @@ mod test {
     #[serial]
     fn should_not_make_symlink() {
         crate::mock::logger();
-        let mut client = setup_client();
+        let client = setup_client();
         // Create file
         let p = Path::new("a.sh");
         let symlink = Path::new("b.sh");
