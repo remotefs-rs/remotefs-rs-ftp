@@ -12,6 +12,7 @@
 Released on 10/10/2022
 
 - Fixed secure feature
+- SuppaFTP 4.5.2
 
 ## 0.1.1
 
