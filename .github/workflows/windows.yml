@@ -18,7 +18,7 @@ jobs:
       - name: Build (unsecure)
         run: cargo build
       - name: Run tests
-        run: cargo test --verbose --no-default-features --features find,secure,github-actions --no-fail-fast
+        run: cargo test --verbose --no-default-features --features find,rustls,github-actions --no-fail-fast
         env:
           RUST_LOG: trace
       - name: Format
