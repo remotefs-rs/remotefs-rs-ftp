@@ -11,6 +11,10 @@ jobs:
 
     steps:
       - uses: actions/checkout@v2
+      - name: Setup rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
       - name: Build (native-tls)
         run: cargo build --features native-tls
       - name: Build (rustls)

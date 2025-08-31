@@ -15,11 +15,10 @@ jobs:
         run: sudo apt update && sudo apt install -y libssh2-1-dev libssl-dev
       - name: Setup containers
         run: docker compose -f "tests/docker-compose.yml" up -d --build
-      - uses: actions-rs/toolchain@v1
+      - name: Setup rust toolchain
+        uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-          override: true
-          components: rustfmt, clippy
       - name: Build (native-tls)
         run: cargo build --features native-tls
       - name: Build (rustls)

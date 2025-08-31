@@ -10,31 +10,23 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2
-      - name: Install dependencies
-        run: sudo apt update && sudo apt install -y libssh2-1-dev libssl-dev
-      - name: Setup containers
-        run: docker compose -f "tests/docker-compose.yml" up -d --build
-      - name: Setup nightly toolchain
-        uses: actions-rs/toolchain@v1
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Setup rust toolchain
+        uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: nightly
-          override: true
-      - name: Run tests (nightly)
-        uses: actions-rs/cargo@v1
+          toolchain: stable
+
+      - uses: taiki-e/install-action@v2
         with:
-          command: test
-          args: --lib --features native-tls,github-actions,with-containers --no-fail-fast
-        env:
-          RUST_LOG: trace
-          CARGO_INCREMENTAL: "0"
-          RUSTFLAGS: "-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Cpanic=abort -Zpanic_abort_tests"
-          RUSTDOCFLAGS: "-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Clink-dead-code -Coverflow-checks=off -Cpanic=abort -Zpanic_abort_tests"
-      - name: Coverage with grcov
-        id: coverage
-        uses: actions-rs/grcov@v0.1
-      - name: Coveralls
-        uses: coverallsapp/github-action@v1.1.1
+          tool: cargo-llvm-cov
+
+      - name: Run tests with coverage
+        run: cargo llvm-cov --no-fail-fast --no-default-features --features rustls,find --workspace --lcov --output-path lcov.info
+
+      - name: Upload to Coveralls
+        uses: coverallsapp/github-action@v2.3.6
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          path-to-lcov: ${{ steps.coverage.outputs.report }}
+          file: lcov.info
