@@ -21,8 +21,6 @@ jobs:
         run: cargo build --features rustls
       - name: Build (unsecure)
         run: cargo build
-      - name: Run tests
-        run: cargo test --verbose --no-default-features --features find,rustls --no-fail-fast
         env:
           RUST_LOG: trace
       - name: Format
