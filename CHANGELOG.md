@@ -1,6 +1,7 @@
 # Changelog
 
 - [Changelog](#changelog)
+  - [0.3.0](#030)
   - [0.2.2](#022)
   - [0.2.1](#021)
   - [0.2.0](#020)
@@ -11,6 +12,16 @@
   - [0.1.0](#010)
 
 ---
+
+## 0.3.0
+
+Released on 31/08/2025
+
+- Suppaftp 7.0.0
+- Edition 2024
+- MSRV 1.85.1
+- Removed `secure` feature
+- Renamed `vendored` feature to `native-tls-vendored`
 
 ## 0.2.2
 
