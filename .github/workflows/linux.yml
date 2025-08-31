@@ -12,9 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - name: Install dependencies
-        run: sudo apt update && sudo apt install -y libssh2-1-dev libssl-dev
-      - name: Setup containers
-        run: docker compose -f "tests/docker-compose.yml" up -d --build
+        run: sudo apt update && sudo apt install -y libssl-dev
       - name: Setup rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -29,7 +27,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: test
-          args: --features native-tls,github-actions,with-containers --no-fail-fast
+          args: --features rustls --no-fail-fast
         env:
           RUST_LOG: trace
       - name: Format

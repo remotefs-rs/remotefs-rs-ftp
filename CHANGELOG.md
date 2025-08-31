@@ -22,6 +22,7 @@ Released on 31/08/2025
 - MSRV 1.85.1
 - Removed `secure` feature
 - Renamed `vendored` feature to `native-tls-vendored`
+- Added the `passive_stream_builder` option
 
 ## 0.2.2
 
