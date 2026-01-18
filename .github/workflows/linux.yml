@@ -1,6 +1,6 @@
 name: Linux
 
-on: [push, pull_request]
+on: [ push, pull_request ]
 
 env:
   CARGO_TERM_COLOR: always
@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v6
       - name: Install dependencies
         run: sudo apt update && sudo apt install -y libssl-dev
       - name: Setup rust toolchain
@@ -20,14 +20,12 @@ jobs:
       - name: Build (native-tls)
         run: cargo build --features native-tls
       - name: Build (rustls)
-        run: cargo build --features rustls
+        run: cargo build --features rustls-aws-lc-rs
       - name: Build (unsecure)
         run: cargo build
       - name: Run tests
-        uses: actions-rs/cargo@v1
-        with:
-          command: test
-          args: --features rustls --no-fail-fast
+        run: |
+          cargo test --features rustls-aws-lc-rs --no-fail-fast
         env:
           RUST_LOG: trace
       - name: Format
@@ -37,4 +35,4 @@ jobs:
       - name: Clippy (native-tls)
         run: cargo clippy --features native-tls -- -Dwarnings
       - name: Clippy (rustls)
-        run: cargo clippy --features rustls -- -Dwarnings
+        run: cargo clippy --features rustls-aws-lc-rs -- -Dwarnings

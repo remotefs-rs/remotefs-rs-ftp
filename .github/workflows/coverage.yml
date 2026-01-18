@@ -1,6 +1,6 @@
 name: Coverage
 
-on: [push, pull_request]
+on: [ push, pull_request ]
 
 env:
   CARGO_TERM_COLOR: always
@@ -11,7 +11,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v2
+        uses: actions/checkout@v6
 
       - name: Setup rust toolchain
         uses: dtolnay/rust-toolchain@stable
@@ -23,7 +23,7 @@ jobs:
           tool: cargo-llvm-cov
 
       - name: Run tests with coverage
-        run: cargo llvm-cov --no-fail-fast --no-default-features --features rustls,find --workspace --lcov --output-path lcov.info
+        run: cargo llvm-cov --no-fail-fast --no-default-features --features rustls-aws-lc-rs,find --workspace --lcov --output-path lcov.info
 
       - name: Upload to Coveralls
         uses: coverallsapp/github-action@v2.3.6
