@@ -17,6 +17,7 @@
 
 Released on 18/01/2026
 
+- MRSV set to `1.88.0`
 - Replaced `rustls` feature with `rustls-aws-lc-rs` and `rustls-ring` features to choose the desired rustls backend
 
 ## 0.3.0
