@@ -27,3 +27,14 @@ dist/pkgs/arch/*.tar.gz
 # Rust Rover
 .idea/
 
+# Coverage
+coverage/
+lcov*.info
+
+# Local environment
+.env
+
+# Local agent state
+.superpowers/
+.claude/
+
