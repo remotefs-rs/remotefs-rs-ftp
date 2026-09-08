@@ -1,90 +1,103 @@
 # Changelog
 
-- [Changelog](#changelog)
-  - [0.4.1](#041)
-  - [0.4.0](#040)
-  - [0.3.0](#030)
-  - [0.2.2](#022)
-  - [0.2.1](#021)
-  - [0.2.0](#020)
-  - [0.1.4](#014)
-  - [0.1.3](#013)
-  - [0.1.2](#012)
-  - [0.1.1](#011)
-  - [0.1.0](#010)
+All notable changes to this project are documented in this file.
 
----
+## 0.5.0
+
+Released on 2026-09-08
+
+### Added
+
+- implement exec via the FTP SITE command
+
+> exec() was a stub returning UnsupportedFeature. Implement it on top of
+> suppaftp's site(), which is the closest FTP primitive to a generic
+> exec: it only runs commands the server exposes as SITE subcommands
+> (e.g. CHMOD, HELP), not arbitrary shell commands.
 
 ## 0.4.1
 
-Released on 31/08/2026
+Released on 2026-08-31
 
-- Bump `suppaftp` to `11.0.0`
+### Build
+
+- bump suppaftp to 11.0.0 (#2)
 
 ## 0.4.0
 
-Released on 18/01/2026
+Released on 2026-01-18
 
-- MRSV set to `1.88.0`
+### Breaking changes
+
 - Replaced `rustls` feature with `rustls-aws-lc-rs` and `rustls-ring` features to choose the desired rustls backend
+
+> `rustls` feature has been removed. Use `rustls-aws-lc-rs` or `rustls-ring` instead
+
+### Build
+
+- Breaking: Replaced `rustls` feature with `rustls-aws-lc-rs` and `rustls-ring` features to choose the desired rustls backend
+- msrv 1.88
 
 ## 0.3.0
 
-Released on 31/08/2025
+Released on 2025-08-31
 
-- Suppaftp 7.0.0
-- Edition 2024
-- MSRV 1.85.1
-- Removed `secure` feature
-- Renamed `vendored` feature to `native-tls-vendored`
+### Breaking changes
+
+- SuppaFTP 7
+
+> Renamed features
+
+### Added
+
 - Added the `passive_stream_builder` option
+
+### Fixed
+
+- test is sync and send
+- path_slash 0.2 fixup
+
+### Build
+
+- Breaking: SuppaFTP 7
+
+> Edition 2024
+> MSRV 1.85.1
+> Removed `secure` feature
+> Renamed `vendored` feature to `native-tls-vendored`
 
 ## 0.2.2
 
-Released on 18/10/2024
+Released on 2024-10-18
 
-- Fix rustls 0.23
+### Fixed
+
+- rustls 0.23 compatibility
 
 ## 0.2.1
 
-Released on 07/10/2024
+Released on 2024-10-07
 
-- Removed unused dep: `users`
+### Fixed
+
+- removed users dep
 
 ## 0.2.0
 
-Released on 30/09/2024
+Released on 2024-09-30
 
-- remotefs `0.3.0`
+### Added
 
-## 0.1.4
+- remotefs 0.3
 
-Released on 24/05/2024
+### Fixed
 
 - bump `suppaftp` to `6.0.0`
-
-## 0.1.3
-
-Released on 25/02/2023
-
-- bump `suppaftp` to `5.0.0`
-
-## 0.1.2
-
-Released on 10/10/2022
-
-- Fixed secure feature
-- SuppaFTP 4.5.2
+- revert webkpi
+- tests
+- ci
+- lint
 
 ## 0.1.1
 
-Released on 08/10/2022
-
-- Added support for rustls
-- Added static link for native-tls
-
-## 0.1.0
-
-Released on 04/01/2022
-
-- First release
+Released on 2022-01-04
