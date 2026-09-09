@@ -49,11 +49,20 @@ client implementation providing FTP/FTPS access, built on top of
 (`src/lib.rs`, crate name `remotefs_ftp`) with no binaries or examples.
 
 - **One client.** `FtpFs` in `src/client.rs` implements `remotefs::RemoteFs`
-  over `suppaftp`'s blocking `FtpStream`, wrapping every FTP verb the
-  filesystem needs (`LIST`, `RETR`, `STOR`, `DELE`, `MKD`, `RNFR`/`RNTO`,
-  `SITE`). `src/client/stream.rs` implements self-finalizing read/write
-  streams so a transfer completes when the stream is dropped, without an
-  explicit close call.
+  (remotefs 1) over `suppaftp`'s blocking `FtpStream`, wrapping every FTP verb
+  the filesystem needs (`LIST`, `RETR`, `STOR`, `APPE`, `DELE`, `MKD`, `RMD`,
+  `RNFR`/`RNTO`, `SITE`). Operations take `&self`: the control stream lives
+  behind `Mutex<Option<FtpStream>>`, and an `AtomicBool` transfer flag makes
+  every control command fail with `ProtocolError` while a transfer stream is
+  alive, because FTP has one data channel. There is no working directory;
+  every path must be a UTF-8, POSIX-rooted absolute path without parent
+  components and is validated with `remotefs::path::ensure_absolute`.
+  Ranged reads request FTP `REST` before `RETR` and fall back to local prefix
+  skipping when the server refuses the marker or the offset is too large.
+  `src/client/stream.rs` wraps suppaftp 12's self-finalizing `TransferStream`
+  in `RemoteRead`/`RemoteWrite` implementations whose `finish` reads the
+  transfer reply; `src/client/error.rs` maps `FtpError` (transport failures
+  and reply codes) to typed `RemoteError` kinds while keeping the source.
 - **Path handling.** `src/utils/path.rs` normalizes FTP paths, including the
   Windows-specific quirks handled by the `path-slash` dependency.
 - **TLS backends are mutually exclusive.** `native-tls`, `rustls-aws-lc-rs`,
@@ -91,7 +100,7 @@ client implementation providing FTP/FTPS access, built on top of
 ## Conventions
 
 - Toolchain is pinned to Rust 1.98.0 (`rust-toolchain.toml`). `package.edition`
-  in `Cargo.toml` is 2024 and `package.rust-version` is 1.88.0; do not bump
+  in `Cargo.toml` is 2024 and `package.rust-version` is 1.89.0; do not bump
   either as part of unrelated changes.
 - Public library items need canonical rustdoc, including a runnable example.
   `just test` runs doctests, and `just doc` denies warnings.
