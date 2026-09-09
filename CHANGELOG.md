@@ -2,6 +2,27 @@
 
 All notable changes to this project are documented in this file.
 
+## 1.0.0
+
+Released on 2026-09-09
+
+### Breaking changes
+
+- migrate to remotefs 1
+
+> migrate FtpFs to the remotefs 1 blocking contract on top of suppaftp 12 and
+> release version 1.0.0. Every path must be absolute, pwd and change_dir are
+> removed, operations take a shared reference, connect returns unit and the
+> server banner moves to FtpFs::welcome_message, transfers return owned streams
+> that must be finished, and the minimum supported Rust version is 1.89.0.
+
+### Added
+
+- Breaking: migrate to remotefs 1
+- FTP paths require a single POSIX `/` root, valid UTF-8, no ASCII control
+  characters, and no parent components; Windows drive and UNC forms are
+  rejected.
+
 ## 0.5.0
 
 Released on 2026-09-08
