@@ -19,7 +19,7 @@ just coverage                  # cargo llvm-cov, writes lcov.info
 just fmt                       # dprint fmt (Markdown, Rust, TOML, YAML)
 just fmt_check                 # dprint check
 just lint "-- -D warnings"     # alias of just clippy
-just clippy_matrix             # clippy with no TLS backend and each TLS backend, -D warnings
+just clippy_matrix             # clippy with no TLS backend and every sync/async TLS backend, -D warnings
 just doc                       # cargo doc --no-deps with RUSTDOCFLAGS="-D warnings"
 just deny                      # cargo deny check
 just scan_secrets              # trufflehog filesystem
@@ -33,10 +33,12 @@ just publish "--dry-run --allow-dirty"
 `just check` is the required gate before declaring work done. It chains
 `fmt_check`, `clippy_matrix`, `doc`, `deny`, and `test`.
 
-Tests in `src/client.rs` spin up a `delfer/alpine-ftp-server` container per
-test via `testcontainers` (see `src/test_container.rs`), so a running Docker
-daemon is required. Run `just test`, or with a specific TLS backend enabled
-via `just test "--features rustls-aws-lc-rs"`.
+Tests in `src/client/sync.rs` and `src/client/tokio.rs` spin up a
+`delfer/alpine-ftp-server` container per test via `testcontainers` (see
+`src/test_container.rs`), so a running Docker daemon is required. Run
+`just test`, or with a specific TLS backend enabled via
+`just test "--features rustls-aws-lc-rs"`. The complete sync-plus-Tokio
+rustls suite is `just test "--features rustls-aws-lc-rs,tokio-rustls-aws-lc-rs"`.
 
 If a required tool is missing, say so. Never claim a check passed or silently
 swap in a weaker command.
@@ -48,31 +50,42 @@ client implementation providing FTP/FTPS access, built on top of
 [`suppaftp`](https://docs.rs/suppaftp). It is a library-only crate
 (`src/lib.rs`, crate name `remotefs_ftp`) with no binaries or examples.
 
-- **One client.** `FtpFs` in `src/client.rs` implements `remotefs::RemoteFs`
-  (remotefs 1) over `suppaftp`'s blocking `FtpStream`, wrapping every FTP verb
-  the filesystem needs (`LIST`, `RETR`, `STOR`, `APPE`, `DELE`, `MKD`, `RMD`,
-  `RNFR`/`RNTO`, `SITE`). Operations take `&self`: the control stream lives
-  behind `Mutex<Option<FtpStream>>`, and an `AtomicBool` transfer flag makes
-  every control command fail with `ProtocolError` while a transfer stream is
-  alive, because FTP has one data channel. There is no working directory;
-  every path must be a UTF-8, POSIX-rooted absolute path without parent
-  components and is validated with `remotefs::path::ensure_absolute`.
+- **Two clients.** `FtpFs` in `src/client/sync.rs` implements
+  `remotefs::RemoteFs` over `suppaftp`'s blocking `FtpStream`; `TokioFtpFs` in
+  `src/client/tokio.rs` implements `remotefs::AsyncRemoteFs` over suppaftp's
+  Tokio stream. Both clients wrap every FTP verb the filesystem needs (`LIST`,
+  `RETR`, `STOR`, `APPE`, `DELE`, `MKD`, `RMD`, `RNFR`/`RNTO`, `SITE`). The
+  shared `src/client/{error,guard,list,path}.rs` modules own error mapping,
+  transfer state, LIST parsing and path validation. There is no working
+  directory; every path must be a UTF-8, POSIX-rooted absolute path without
+  parent components and is validated with `remotefs::path::ensure_absolute`.
   Ranged reads request FTP `REST` before `RETR` and fall back to local prefix
   skipping when the server refuses the marker or the offset is too large.
-  `src/client/stream.rs` wraps suppaftp 12's self-finalizing `TransferStream`
-  in `RemoteRead`/`RemoteWrite` implementations whose `finish` reads the
-  transfer reply; `src/client/error.rs` maps `FtpError` (transport failures
-  and reply codes) to typed `RemoteError` kinds while keeping the source.
+  `src/client/sync/stream.rs` and `src/client/tokio/stream.rs` wrap suppaftp
+  12's self-finalizing `TransferStream` in the corresponding remotefs stream
+  traits whose `finish` reads the transfer reply; `src/client/error.rs` maps
+  `FtpError` (transport failures and reply codes) to typed `RemoteError` kinds
+  while keeping the source.
+- **Async concurrency and cancellation.** `TokioFtpFs` serializes control
+  operations with an async mutex. `OperationGuard` marks a connection unusable
+  when an in-flight command future is cancelled. A `TransferGuard` makes
+  control operations fail with `ProtocolError` while an async data stream is
+  alive. Async streams must be explicitly finished; dropping a partial read
+  cannot await cleanup and therefore requires reconnecting, while completed
+  downloads and uploads leave the deferred completion reply for the next
+  command.
 - **Path handling.** `src/utils/path.rs` normalizes FTP paths, including the
   Windows-specific quirks handled by the `path-slash` dependency.
-- **TLS backends are mutually exclusive.** `native-tls`, `rustls-aws-lc-rs`,
-  and `rustls-ring` are alternative features, not additive ones; enabling more
-  than one at a time fails to build. `cargo build --all-features` and
-  `cargo clippy --all-features` are never valid here — use `just build`/
-  `just clippy` with at most one TLS feature, or `just clippy_matrix` to check
-  every backend individually. `deny.toml`'s `all-features = true` is safe
-  because `cargo-deny` only walks the dependency graph and never compiles the
-  crate.
+- **TLS backends are mutually exclusive within each client family.** The sync
+  backends (`native-tls`, `rustls-aws-lc-rs`, `rustls-ring`) and Tokio backends
+  (`tokio-native-tls`, `tokio-rustls-aws-lc-rs`, `tokio-rustls-ring`) are
+  alternative features. One sync and one Tokio backend may be enabled
+  together; the sync features never pull Tokio in. `cargo build --all-features`
+  and `cargo clippy --all-features` are never valid here — use `just build`/
+  `just clippy` with at most one backend from each family, or
+  `just clippy_matrix` to check every combination individually. `deny.toml`'s
+  `all-features = true` is safe because `cargo-deny` only walks the dependency
+  graph and never compiles the crate.
 - **Command layer.** `Justfile` is a thin importer. Each recipe group lives in
   its own file under `just/` (`build`, `test`, `code_check`, `changelog`,
   `publish`) and carries a `[group(...)]` attribute so `just --list` stays
@@ -92,10 +105,10 @@ client implementation providing FTP/FTPS access, built on top of
   crates.io as the only allowed source.
 - **CI only runs the container-backed test suite on Linux.**
   `.github/workflows/ci.yml`'s `quality-macos` and `quality-windows` jobs build
-  and lint every TLS backend but do not run tests, since the FTP test
-  container needs a Docker daemon that isn't available there;
-  `quality-linux` builds every backend, runs the `rustls-aws-lc-rs` test
-  suite, and uploads coverage.
+  and lint every sync and async TLS backend but do not run tests, since the FTP
+  test container needs a Docker daemon that isn't available there;
+  `quality-linux` builds every backend, runs the combined
+  `rustls-aws-lc-rs,tokio-rustls-aws-lc-rs` test suite, and uploads coverage.
 
 ## Conventions
 

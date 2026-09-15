@@ -1,7 +1,8 @@
 alias lint := clippy
 
-# TLS backends are mutually exclusive, so `--all-features` does not build.
+# TLS backends are mutually exclusive within each family, so `--all-features` does not build.
 tls_features := "native-tls rustls-aws-lc-rs rustls-ring"
+tokio_features := "tokio tokio-native-tls tokio-rustls-aws-lc-rs tokio-rustls-ring rustls-aws-lc-rs,tokio-rustls-aws-lc-rs"
 
 # Format Markdown, Rust, TOML, and YAML files.
 [group('code-check')]
@@ -22,7 +23,7 @@ clippy args="":
 [group('code-check')]
 clippy_matrix:
   just clippy "-- -D warnings"
-  for feature in {{ tls_features }}; do \
+  for feature in {{ tls_features }} {{ tokio_features }}; do \
     just clippy "--features $feature -- -D warnings"; \
   done
 
